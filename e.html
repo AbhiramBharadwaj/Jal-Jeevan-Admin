@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Lock</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+        }
+        #status {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #555;
+        }
+        #transcription {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            min-height: 50px;
+            background-color: #f9f9f9;
+        }
+        select, button {
+            padding: 10px;
+            margin: 10px 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        select {
+            background-color: #e0e0e0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        @media (max-width: 600px) {
+            .container {
+                width: 95%;
+                padding: 15px;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voice Lock</h1>
+        <p id="status">Click 'Set Lock' and say "hi" to set the lock.</p>
+        <div id="transcription"></div>
+        <select id="language">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="es-ES">Spanish</option>
+        </select>
+        <button id="setLockButton">Set Lock</button>
+        <button id="recordButton" disabled>Start Recording</button>
+        <p id="result"></p>
+    </div>
+    <script>
+        (function () {
+            const passphrase = "hi"; // Predefined passphrase
+            const setLockButton = document.getElementById("setLockButton");
+            const recordButton = document.getElementById("recordButton");
+            const status = document.getElementById("status");
+            const transcription = document.getElementById("transcription");
+            const result = document.getElementById("result");
+            const languageSelect = document.getElementById("language");
+
+            let isLockSet = false; // Track if lock is set
+            let referenceConfidence = 0; // Store confidence from set phase
+
+            // Check if Web Speech API is available
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                status.textContent = "Speech Recognition API not supported in this browser.";
+                setLockButton.disabled = true;
+                recordButton.disabled = true;
+                result.textContent = "Please use a compatible browser (e.g., Chrome).";
+                result.className = "error";
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = languageSelect.value;
+
+            // Update language when changed
+            languageSelect.addEventListener("change", () => {
+                recognition.lang = languageSelect.value;
+            });
+
+            // Handle set lock button
+            setLockButton.addEventListener("click", () => {
+                recognition.start();
+                setLockButton.disabled = true;
+                status.textContent = "Listening for 'hi' to set lock...";
+                transcription.textContent = "";
+                result.textContent = "";
+            });
+
+            // Handle unlock button
+            recordButton.addEventListener("click", () => {
+                if (!isRecording) {
+                    recognition.start();
+                    recordButton.textContent = "Stop Recording";
+                    status.textContent = "Listening for 'hi' to unlock...";
+                    transcription.textContent = "";
+                    result.textContent = "";
+                } else {
+                    recognition.stop();
+                }
+            });
+
+            let isRecording = false;
+
+            // Handle recognition start
+            recognition.onstart = () => {
+                isRecording = true;
+            };
+
+            // Handle recognition end
+            recognition.onend = () => {
+                isRecording = false;
+                if (!isLockSet) {
+                    setLockButton.disabled = false;
+                    status.textContent = "Click 'Set Lock' and say 'hi' to set the lock.";
+                } else {
+                    recordButton.textContent = "Start Recording";
+                    status.textContent = "Click 'Start Recording' and say 'hi' to unlock.";
+                }
+            };
+
+            // Handle recognition errors
+            recognition.onerror = (event) => {
+                status.textContent = "Error occurred: " + event.error;
+                result.textContent = "Unable to process voice. Try again.";
+                result.className = "error";
+                recognition.stop();
+                setLockButton.disabled = !isLockSet;
+            };
+
+            // Handle recognition results
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.trim().toLowerCase();
+                const confidence = event.results[0][0].confidence;
+
+                transcription.textContent = transcript;
+
+                if (event.results[0].isFinal) {
+                    if (!isLockSet) {
+                        // Setting the lock
+                        if (transcript === passphrase && confidence > 0.9) {
+                            isLockSet = true;
+                            referenceConfidence = confidence;
+                            result.textContent = "Lock set successfully!";
+                            result.className = "success";
+                            setLockButton.disabled = true;
+                            recordButton.disabled = false;
+                            status.textContent = "Click whippersnapper Click 'Start Recording' and say 'hi' to unlock.";
+                        } else {
+                            result.textContent = "Failed to set lock. Say 'hi' clearly.";
+                            result.className = "error";
+                            setLockButton.disabled = false;
+                        }
+                    } else {
+                        // Unlocking attempt
+                        if (transcript === passphrase && confidence > 0.9) {
+                            result.textContent = "Access Granted! Voice recognized.";
+                            result.className = "success";
+                        } else if (transcript === passphrase) {
+                            result.textContent = "Access Denied. Voice not recognized (low confidence).";
+                            result.className = "error";
+                        } else {
+                            result.textContent = "Access Denied. Incorrect phrase.";
+                            result.className = "error";
+                        }
+                    }
+                    recognition.stop();
+                }
+            };
+
+            // Handle microphone permission prompt
+            setLockButton.addEventListener("click", () => {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .catch((err) => {
+                        status.textContent = "Microphone access denied. Please allow access.";
+                        setLockButton.disabled = true;
+                        recordButton.disabled = true;
+                        result.textContent = "Microphone access required.";
+                        result.className = "error";
+                    });
+            });
+
+            recordButton.addEventListener("click", () => {
+                if (!isRecording) {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .catch((err) => {
+                            status.textContent = "Microphone access denied. Please allow access.";
+                            recordButton.disabled = true;
+                            result.textContent = "Microphone access required.";
+                            result.className = "error";
+                        });
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
