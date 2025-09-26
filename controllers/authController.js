@@ -77,52 +77,80 @@ const register = async (req, res) => {
 // @route   POST /api/auth/request-otp
 // @access  Public
 const requestLoginOTP = async (req, res) => {
+  const log = (...args) => console.log(new Date().toISOString(), '-', ...args);
+
+  log('--- requestLoginOTP called ---');
   try {
     const { email } = req.body;
-    console.log(email);
-    
+    log('Incoming request body:', req.body);
+    log('Email extracted:', email);
+
+    if (!email) {
+      log('No email in request');
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
 
     // Check if user exists
+    log('Looking up user in database...');
     const user = await User.findOne({ email, isActive: true })
       .populate('gramPanchayat');
 
     if (!user) {
+      log('User not found or inactive for email:', email);
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
-    console.log(user);
 
+    log('User found:', {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      isActive: user.isActive,
+      gramPanchayat: user.gramPanchayat
+    });
 
     // Generate OTP
+    log('Generating OTP...');
     const otp = user.generateOTP();
-    console.log(otp);
-    
+    log('Generated OTP:', otp);
+
+    log('Saving user with new OTP...');
     await user.save();
+    log('User saved successfully');
 
     // Send OTP email
+    log('Sending OTP email...');
     const emailResult = await sendOTPEmail(email, otp, user.name);
-    console.log(emailResult);
-    
+    log('Email send result:', emailResult);
+
     if (!emailResult.success) {
+      log('Email sending failed');
       return res.status(500).json({
         success: false,
         message: 'Failed to send OTP email'
       });
     }
 
+    log('OTP email sent successfully');
     res.json({
       success: true,
       message: 'OTP sent to your email',
       data: { email }
     });
   } catch (error) {
+    log('Error occurred:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
       error: error.message
     });
+  } finally {
+    log('--- requestLoginOTP finished ---');
   }
 };
 
