@@ -4,6 +4,7 @@ const Village = require('../models/Village');
 const House = require('../models/House');
 const WaterBill = require('../models/WaterBill');
 const mongoose = require('mongoose');
+const indianMobileRegex = /^\+91\d{10}$/;
 
 // @desc    Get super admin dashboard data
 // @route   GET /api/super-admin/dashboard
@@ -163,6 +164,16 @@ const getGramPanchayatDetails = async (req, res) => {
 // @access  Private (Super Admin)
 const updateGramPanchayat = async (req, res) => {
   try {
+    if (
+      req.body?.contactPerson?.mobile &&
+      !indianMobileRegex.test(req.body.contactPerson.mobile)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact mobile must be in +91XXXXXXXXXX format'
+      });
+    }
+
     const gramPanchayat = await GramPanchayat.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -235,6 +246,13 @@ const createGPAdmin = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Gram Panchayat not found'
+      });
+    }
+
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
       });
     }
 
@@ -311,6 +329,13 @@ const getSuperAdmins = async (req, res) => {
 const createSuperAdmin = async (req, res) => {
   try {
     const { name, email, mobile, password } = req.body;
+
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
+      });
+    }
 
     const superAdmin = new User({
       name,
@@ -401,6 +426,13 @@ const getSuperAdminDetails = async (req, res) => {
 const updateSuperAdmin = async (req, res) => {
   try {
     const { name, email, mobile, password, isActive } = req.body;
+
+    if (mobile && !indianMobileRegex.test(mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
+      });
+    }
 
     const updateData = {
       name,

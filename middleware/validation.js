@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const indianMobileRegex = /^\+91\d{10}$/;
 
 const validate = (schema) => {
   return (req, res, next) => {
@@ -19,7 +20,7 @@ const schemas = {
   register: Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
-    mobile: Joi.string().required(),
+    mobile: Joi.string().pattern(indianMobileRegex).required(),
     password: Joi.string().min(6).required(),
     role: Joi.string().valid('super_admin', 'gp_admin', 'mobile_user', 'pillar_admin').required(),
     gramPanchayat: Joi.string().when('role', {
@@ -27,6 +28,11 @@ const schemas = {
       then: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
       otherwise: Joi.string().optional()
     })
+  }),
+
+  login: Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().required()
   }),
 
   requestOTP: Joi.object({
@@ -58,14 +64,14 @@ const schemas = {
     state: Joi.string().required(),
     contactPerson: Joi.object({
       name: Joi.string().required(),
-      mobile: Joi.string().required()
+      mobile: Joi.string().pattern(indianMobileRegex).required()
     }).required()
   }),
 
   createUser: Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
-    mobile: Joi.string().required(),
+    mobile: Joi.string().pattern(indianMobileRegex).required(),
     password: Joi.string().min(6).required(),
     role: Joi.string().valid('super_admin', 'gp_admin', 'mobile_user', 'pillar_admin').required(),
     gramPanchayat: Joi.string().when('role', {
@@ -86,7 +92,7 @@ const schemas = {
     villageId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
     ownerName: Joi.string().required(),
     aadhaarNumber: Joi.string().required(),
-    mobileNumber: Joi.string().required(),
+    mobileNumber: Joi.string().pattern(indianMobileRegex).required(),
     address: Joi.string().required(),
     waterMeterNumber: Joi.string().required(),
     previousMeterReading: Joi.number().min(0).default(0),
@@ -120,7 +126,7 @@ const schemas = {
     villageId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
     ownerName: Joi.string().required(),
     aadhaarNumber: Joi.string().required(),
-    mobileNumber: Joi.string().required(),
+    mobileNumber: Joi.string().pattern(indianMobileRegex).required(),
     address: Joi.string().required(),
     waterMeterNumber: Joi.string().required(),
     previousMeterReading: Joi.number().min(0).default(0),

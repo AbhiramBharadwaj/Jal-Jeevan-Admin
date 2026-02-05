@@ -12,6 +12,7 @@ const moment = require('moment');
 const mongoose = require('mongoose');
 const fs = require('fs');
 const XLSX = require('xlsx');
+const indianMobileRegex = /^\+91\d{10}$/;
 
 // Helper function to round to 2 decimal places
 const roundToTwo = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
@@ -446,6 +447,13 @@ const createHouse = async (req, res) => {
 
     const gpId = req.user.gramPanchayat._id;
     const selectedVillageId = villageId || village;
+
+    if (!indianMobileRegex.test(mobileNumber || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
+      });
+    }
 
     // Validate village belongs to this GP
     const villageDoc = await Village.findOne({
@@ -1399,6 +1407,13 @@ const createUser = async (req, res) => {
     const { name, email, mobile, password, role } = req.body;
     const gpId = req.user.gramPanchayat._id;
 
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
+      });
+    }
+
     // Only allow creating gp_admin and mobile_user roles
     if (!['gp_admin', 'mobile_user'].includes(role)) {
       return res.status(400).json({
@@ -1481,6 +1496,13 @@ const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const gpId = req.user.gramPanchayat._id;
+
+    if (req.body.mobile && !indianMobileRegex.test(req.body.mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in +91XXXXXXXXXX format'
+      });
+    }
 
     const user = await User.findOneAndUpdate(
       { _id: id, gramPanchayat: gpId },
@@ -1683,6 +1705,16 @@ const exportBillsData = async (req, res) => {
 const updateGPSettings = async (req, res) => {
   try {
     const gpId = req.user.gramPanchayat._id;
+
+    if (
+      req.body?.contactPerson?.mobile &&
+      !indianMobileRegex.test(req.body.contactPerson.mobile)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact mobile must be in +91XXXXXXXXXX format'
+      });
+    }
 
     const gramPanchayat = await GramPanchayat.findByIdAndUpdate(
       gpId,

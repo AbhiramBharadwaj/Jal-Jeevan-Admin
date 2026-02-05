@@ -95,6 +95,7 @@ const router = express.Router();
 const { validate, schemas } = require('../middleware/validation');
 const {
   register,
+  login,
   requestLoginOTP,
   verifyLoginOTP,
   forgotPassword,
@@ -139,10 +140,43 @@ router.post('/register', validate(schemas.register), register);
 
 /**
  * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login with email and password
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid email or password
+ *       500:
+ *         description: Server error
+ */
+router.post('/login', validate(schemas.login), login);
+
+/**
+ * @swagger
  * /api/auth/request-otp:
  *   post:
- *     summary: Request OTP for login
+ *     summary: Request OTP for secured edit actions
  *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -171,14 +205,16 @@ router.post('/register', validate(schemas.register), register);
  *       500:
  *         description: Server error
  */
-router.post('/request-otp', validate(schemas.requestOTP), requestLoginOTP);
+router.post('/request-otp', auth, validate(schemas.requestOTP), requestLoginOTP);
 
 /**
  * @swagger
  * /api/auth/verify-login-otp:
  *   post:
- *     summary: Verify OTP and login
+ *     summary: Verify OTP for secured edit actions
  *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -209,7 +245,7 @@ router.post('/request-otp', validate(schemas.requestOTP), requestLoginOTP);
  *       500:
  *         description: Server error
  */
-router.post('/verify-login-otp', validate(schemas.verifyOTP), verifyLoginOTP);
+router.post('/verify-login-otp', auth, validate(schemas.verifyOTP), verifyLoginOTP);
 
 /**
  * @swagger

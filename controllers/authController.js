@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-// const { sendOTPEmail } = require('../utils/emailService'); // temporarily not used
+const { sendOTPEmail } = require('../utils/emailService');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -8,6 +8,14 @@ const generateToken = (id) => {
     expiresIn: process.env.JWT_EXPIRES_IN
   });
 };
+
+const buildUserPayload = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  gramPanchayat: user.gramPanchayat
+});
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -70,37 +78,83 @@ const register = async (req, res) => {
   }
 };
 
-// --------------------------------------------------------------------
-// BYPASS MODE: no email sent, accept any 6-digit OTP
-// --------------------------------------------------------------------
-
-// @desc    Request OTP for login (dummy mode)
-// @route   POST /api/auth/request-otp
+// @desc    Login with email and password
+// @route   POST /api/auth/login
 // @access  Public
-const requestLoginOTP = async (req, res) => {
+const login = async (req, res) => {
   try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
+    const { email, password } = req.body;
 
     const user = await User.findOne({ email, isActive: true }).populate('gramPanchayat');
     if (!user) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
-        message: 'User not found'
+        message: 'Invalid email or password'
       });
     }
 
-    // Bypass: skip real OTP generation and sending
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = generateToken(user._id);
+
     return res.json({
       success: true,
-      message: 'Bypass active: enter any 6-digit code to continue',
-      data: { email }
+      message: 'Login successful',
+      data: {
+        token,
+        user: buildUserPayload(user)
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// --------------------------------------------------------------------
+// OTP for secured actions (edit/delete flows)
+// --------------------------------------------------------------------
+
+// @desc    Request OTP for secured action
+// @route   POST /api/auth/request-otp
+// @access  Private
+const requestLoginOTP = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.user.id, isActive: true });
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized user'
+      });
+    }
+
+    const otp = user.generateOTP();
+    await user.save();
+
+    const emailResult = await sendOTPEmail(user.email, otp, user.name);
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'OTP sent to your registered email',
+      data: { email: user.email }
     });
   } catch (error) {
     res.status(500).json({
@@ -111,12 +165,12 @@ const requestLoginOTP = async (req, res) => {
   }
 };
 
-// @desc    Verify OTP and login (dummy mode)
+// @desc    Verify OTP for secured action
 // @route   POST /api/auth/verify-login-otp
-// @access  Public
+// @access  Private
 const verifyLoginOTP = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { otp } = req.body;
 
     if (!otp || !/^[0-9]{6}$/.test(String(otp))) {
       return res.status(400).json({
@@ -125,32 +179,30 @@ const verifyLoginOTP = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email, isActive: true }).populate('gramPanchayat');
+    const user = await User.findOne({
+      _id: req.user.id,
+      otpCode: otp,
+      otpExpires: { $gt: Date.now() },
+      isActive: true
+    }).populate('gramPanchayat');
+
     if (!user) {
-      return res.status(404).json({
+      return res.status(400).json({
         success: false,
-        message: 'User not found'
+        message: 'Invalid or expired OTP'
       });
     }
 
-    // Bypass: ignore stored OTPs, just issue token
-    user.lastLogin = new Date();
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
     await user.save();
-
-    const token = generateToken(user._id);
 
     res.json({
       success: true,
-      message: 'Login successful (OTP bypass)',
+      message: 'OTP verified successfully',
       data: {
-        token,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          gramPanchayat: user.gramPanchayat
-        }
+        verified: true,
+        user: buildUserPayload(user)
       }
     });
   } catch (error) {
@@ -290,6 +342,7 @@ const getProfile = async (req, res) => {
 
 module.exports = {
   register,
+  login,
   requestLoginOTP,
   verifyLoginOTP,
   forgotPassword,
