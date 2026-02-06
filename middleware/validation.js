@@ -1,5 +1,4 @@
 const Joi = require('joi');
-const indianMobileRegex = /^\+91\d{10}$/;
 
 const validate = (schema) => {
   return (req, res, next) => {
@@ -64,7 +63,7 @@ const schemas = {
     state: Joi.string().required(),
     contactPerson: Joi.object({
       name: Joi.string().required(),
-      mobile: Joi.string().pattern(indianMobileRegex).required()
+      mobile: Joi.string().required()
     }).required()
   }),
 
@@ -107,7 +106,7 @@ const schemas = {
     totalUsage: Joi.number().min(0).required(),
     month: Joi.string().required(),
     year: Joi.number().integer().min(2020).max(2030).required(),
-    // dueDate: Joi.string().required()
+    dueDate: Joi.date().required()
   }),
 
   makePayment: Joi.object({
