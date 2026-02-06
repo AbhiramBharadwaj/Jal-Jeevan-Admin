@@ -39,6 +39,14 @@ const waterBillSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  penaltyAmount: {
+    type: Number,
+    default: 0
+  },
+  interestRate: {
+    type: Number,
+    default: 0
+  },
   arrears: {
     type: Number,
     default: 0
@@ -131,6 +139,8 @@ waterBillSchema.methods.toJSON = function() {
     arrears: roundToTwo(bill.arrears),
     interest: roundToTwo(bill.interest),
     others: roundToTwo(bill.others),
+    penaltyAmount: roundToTwo(bill.penaltyAmount),
+    interestRate: roundToTwo(bill.interestRate),
     
     // Frontend aliases
     amount: roundToTwo(bill.totalAmount),

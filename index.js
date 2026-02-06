@@ -36,7 +36,7 @@ connectDB();
 //     // In production, you can specify allowed origins
 //     const allowedOrigins = [
 //       'http://localhost:3000',
-//       'http://localhost:3001',
+//       'https://jal-jeevan-admin.onrender.com',
 //       'http://localhost:5173',
 //       'http://localhost:8080',
 //       'https://jal-jeevan-main.vercel.app'

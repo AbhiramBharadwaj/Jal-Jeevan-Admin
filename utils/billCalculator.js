@@ -1,7 +1,11 @@
-const calculateWaterBill = (usage, tariff, usageType) => {
+const calculateWaterBill = (usage, tariff, usageType, options = {}) => {
+  const { noMeter = false, damagedMeter = false } = options;
   let amount = 0;
 
-  if (usageType === 'residential') {
+  if (noMeter || damagedMeter) {
+    // Flat charge only; no slab or fixed amount calculations.
+    amount = Number(tariff.noMeterDamagedCharge || 0);
+  } else if (usageType === 'residential') {
     if (usage <= 7) {
       amount = usage * tariff.domestic.upTo7KL;
     } else if (usage <= 10) {
@@ -28,6 +32,10 @@ const calculateWaterBill = (usage, tariff, usageType) => {
     amount = usage * tariff.nonDomestic.commercialEnterprises;
   } else if (usageType === 'industrial') {
     amount = usage * tariff.nonDomestic.industrialEnterprises;
+  }
+
+  if (!noMeter && !damagedMeter) {
+    amount += Number(tariff.fixedAmount || 0);
   }
 
   return Math.round(amount * 100) / 100; // Round to 2 decimal places

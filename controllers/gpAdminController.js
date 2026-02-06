@@ -91,6 +91,7 @@ const getDashboard = async (req, res) => {
           pincode: gramPanchayat.pincode,
           state: gramPanchayat.state,
           contactPerson: gramPanchayat.contactPerson,
+          DueDays: gramPanchayat.DueDays,
           waterTariff: gramPanchayat.waterTariff,
           qrCodeData: gramPanchayat.qrCodeData
         }
@@ -804,11 +805,15 @@ const generateWaterBill = async (req, res) => {
     }
 
     const previousReading = house.previousMeterReading;
-    const totalUsage = currentReading - previousReading;
+    const effectiveCurrentReading = (noMeter || damagedMeter)
+      ? previousReading
+      : Number(currentReading);
+    const totalUsage = (noMeter || damagedMeter)
+      ? 0
+      : effectiveCurrentReading - previousReading;
     console.log(house);
-    
 
-    if (totalUsage < 0) {
+    if (!noMeter && !damagedMeter && totalUsage < 0) {
       return res.status(400).json({
         success: false,
         message: 'Current reading cannot be less than previous reading'
@@ -816,7 +821,12 @@ const generateWaterBill = async (req, res) => {
     }
 
     const gramPanchayat = await GramPanchayat.findById(gpId);
-    const currentDemand = calculateWaterBill(totalUsage, gramPanchayat.waterTariff, house.usageType);
+    const currentDemand = calculateWaterBill(
+      totalUsage,
+      gramPanchayat.waterTariff,
+      house.usageType,
+      { noMeter, damagedMeter }
+    );
 
     // Check for arrears
     const unpaidBills = await WaterBill.find({
@@ -825,6 +835,11 @@ const generateWaterBill = async (req, res) => {
     });
 
     const arrears = roundToTwo(unpaidBills.reduce((sum, bill) => sum + bill.remainingAmount, 0));
+    const baseAmount = roundToTwo(currentDemand + arrears);
+    const penaltyAmount = Number(gramPanchayat.waterTariff?.penaltyAmount || 0);
+    const interestRate = Number(gramPanchayat.waterTariff?.interestRate || 0);
+    const interestAmount = roundToTwo((baseAmount * interestRate) / 100);
+    const totalAmount = roundToTwo(baseAmount + penaltyAmount + interestAmount);
 
     const bill = new WaterBill({
       house: house._id,
@@ -832,14 +847,16 @@ const generateWaterBill = async (req, res) => {
       month,
       year: parseInt(year),
       previousReading,
-      currentReading,
+      currentReading: effectiveCurrentReading,
       totalUsage,
       currentDemand: roundToTwo(currentDemand),
+      penaltyAmount: roundToTwo(penaltyAmount),
+      interest: roundToTwo(interestAmount),
+      interestRate: roundToTwo(interestRate),
       arrears,
-      interest: 0,
       others: 0,
-      totalAmount: roundToTwo(currentDemand + arrears),
-      remainingAmount: roundToTwo(currentDemand + arrears),
+      totalAmount: totalAmount,
+      remainingAmount: totalAmount,
       dueDate: gramPanchayat.DueDays?gramPanchayat.DueDays: "Not Set",
       noMeter,
       damagedMeter,
@@ -849,7 +866,7 @@ const generateWaterBill = async (req, res) => {
     await bill.save();
 
     // Update house previous reading
-    house.previousMeterReading = currentReading;
+    house.previousMeterReading = effectiveCurrentReading;
     await house.save();
 
     const populatedBill = await WaterBill.findById(bill._id).populate({
@@ -1310,20 +1327,64 @@ const generateGPQRCode = async (req, res) => {
 const updateWaterTariff = async (req, res) => {
   try {
     const gpId = req.user.gramPanchayat._id;
-    const { domestic, nonDomestic, fixedAmount } = req.body;
-    console.log({domestic, nonDomestic, fixedAmount});
+    const { domestic, nonDomestic, fixedAmount, DueDays, noMeterDamagedCharge, penaltyAmount, interestRate } = req.body;
+    console.log('[updateWaterTariff] gpId:', gpId.toString());
+    console.log('[updateWaterTariff] payload:', { domestic, nonDomestic, fixedAmount, DueDays, noMeterDamagedCharge, penaltyAmount, interestRate });
+
+    const updateFields = {
+      'waterTariff.domestic': domestic,
+      'waterTariff.nonDomestic': nonDomestic
+    };
+
+    if (fixedAmount !== undefined) {
+      const parsedFixedAmount = Number(fixedAmount);
+      if (!Number.isNaN(parsedFixedAmount)) {
+        updateFields['waterTariff.fixedAmount'] = parsedFixedAmount;
+      }
+    }
+
+    if (noMeterDamagedCharge !== undefined) {
+      const parsedCharge = Number(noMeterDamagedCharge);
+      if (!Number.isNaN(parsedCharge)) {
+        updateFields['waterTariff.noMeterDamagedCharge'] = parsedCharge;
+      }
+    }
+
+    if (penaltyAmount !== undefined) {
+      const parsedPenalty = Number(penaltyAmount);
+      if (!Number.isNaN(parsedPenalty)) {
+        updateFields['waterTariff.penaltyAmount'] = parsedPenalty;
+      }
+    }
+
+    if (interestRate !== undefined) {
+      const parsedInterest = Number(interestRate);
+      if (!Number.isNaN(parsedInterest)) {
+        updateFields['waterTariff.interestRate'] = parsedInterest;
+      }
+    }
+
+    if (DueDays !== undefined) {
+      const parsedDueDays = Number(DueDays);
+      if (!Number.isNaN(parsedDueDays)) {
+        updateFields.DueDays = parsedDueDays;
+      }
+    }
+
+    console.log('[updateWaterTariff] updateFields:', updateFields);
     
     const gramPanchayat = await GramPanchayat.findByIdAndUpdate(
       gpId,
       {
-        $set: {
-          'waterTariff.domestic': domestic,
-          'waterTariff.nonDomestic': nonDomestic,
-          'waterTariff.fixedAmount':fixedAmount
-        }
+        $set: updateFields
       },
       { new: true, runValidators: true }
     );
+
+    console.log('[updateWaterTariff] saved DueDays:', gramPanchayat.DueDays);
+    console.log('[updateWaterTariff] saved fixedAmount:', gramPanchayat.waterTariff?.fixedAmount);
+
+    console.log('[getDashboard] gpId:', gpId.toString(), 'DueDays:', gramPanchayat.DueDays, 'fixedAmount:', gramPanchayat.waterTariff?.fixedAmount);
 
     res.json({
       success: true,
@@ -1334,6 +1395,7 @@ const updateWaterTariff = async (req, res) => {
           gramPanchayatId: gramPanchayat._id,
           name: gramPanchayat.name,
           uniqueId: gramPanchayat.uniqueId,
+          DueDays: gramPanchayat.DueDays,
           waterTariff: gramPanchayat.waterTariff
         }
       }
@@ -1794,7 +1856,11 @@ const editWaterBill = async (req, res) => {
         });
       }
       const totalUsage = currentReading - bill.previousReading;
-      const currentDemand = calculateWaterBill(totalUsage, gramPanchayat.waterTariff, house.usageType);
+      const currentDemand = calculateWaterBill(
+        totalUsage,
+        gramPanchayat.waterTariff,
+        house.usageType
+      );
 
       // Update arrears (exclude the current bill from arrears calculation)
       const unpaidBills = await WaterBill.find({

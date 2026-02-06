@@ -652,7 +652,7 @@ const generateWaterBill = async (req, res) => {
     // const totalUsage = currentReading - previousReading;
     const usage = parseFloat(totalUsage);
 
-   if (totalUsage < 0) {
+   if (!noMeter && !damagedMeter && totalUsage < 0) {
       return res.status(400).json({
         success: false,
         message: 'Current reading cannot be less than previous reading'
@@ -670,7 +670,12 @@ const generateWaterBill = async (req, res) => {
     const gramPanchayat = await GramPanchayat.findById(gpId);
 
     // Calculate bill amount using tariff
-    const currentDemand = calculateWaterBill(usage, gramPanchayat.waterTariff, house.usageType);
+    const currentDemand = calculateWaterBill(
+      usage,
+      gramPanchayat.waterTariff,
+      house.usageType,
+      { noMeter, damagedMeter }
+    );
 
     // Check for arrears from previous unpaid bills
       const unpaidBills = await WaterBill.find({
@@ -680,20 +685,35 @@ const generateWaterBill = async (req, res) => {
    
        const arrears = roundToTwo(unpaidBills.reduce((sum, bill) => sum + bill.remainingAmount, 0));
    
+       const effectiveCurrentReading = (noMeter || damagedMeter)
+         ? previousReading
+         : currentReading;
+       const effectiveTotalUsage = (noMeter || damagedMeter)
+         ? 0
+         : totalUsage;
+
+       const baseAmount = roundToTwo(currentDemand + arrears);
+       const penaltyAmount = Number(gramPanchayat.waterTariff?.penaltyAmount || 0);
+       const interestRate = Number(gramPanchayat.waterTariff?.interestRate || 0);
+       const interestAmount = roundToTwo((baseAmount * interestRate) / 100);
+       const totalAmount = roundToTwo(baseAmount + penaltyAmount + interestAmount);
+
        const bill = new WaterBill({
          house: house._id,
          gramPanchayat: gpId,
          month,
          year: parseInt(year),
          previousReading,
-         currentReading,
-         totalUsage,
+         currentReading: effectiveCurrentReading,
+         totalUsage: effectiveTotalUsage,
          currentDemand: roundToTwo(currentDemand),
+         penaltyAmount: roundToTwo(penaltyAmount),
+         interest: roundToTwo(interestAmount),
+         interestRate: roundToTwo(interestRate),
          arrears,
-         interest: 0,
          others: 0,
-         totalAmount: roundToTwo(currentDemand + arrears),
-         remainingAmount: roundToTwo(currentDemand + arrears),
+         totalAmount: totalAmount,
+         remainingAmount: totalAmount,
          dueDate: gramPanchayat.DueDays?gramPanchayat.DueDays: "Not Set",
          noMeter,
          damagedMeter,

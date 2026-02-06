@@ -79,7 +79,10 @@ const schemas = {
         commercialEnterprises: Joi.number().min(0).optional(),
         industrialEnterprises: Joi.number().min(0).optional()
       }).optional(),
-      fixedAmount: Joi.number().min(0).optional()
+      fixedAmount: Joi.number().min(0).optional(),
+      noMeterDamagedCharge: Joi.number().min(0).optional(),
+      penaltyAmount: Joi.number().min(0).optional(),
+      interestRate: Joi.number().min(0).optional()
     }).optional(),
     qrCodeData: Joi.object({
       upiId: Joi.string().allow('', null).optional(),
@@ -123,8 +126,24 @@ const schemas = {
 
   generateBill: Joi.object({
     previousReading: Joi.number().min(0).required(),
-    currentReading: Joi.number().min(0).required(),
-    totalUsage: Joi.number().min(0).required(),
+    currentReading: Joi.number().min(0).when('noMeter', {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    }).when('damagedMeter', {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    }),
+    totalUsage: Joi.number().min(0).when('noMeter', {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    }).when('damagedMeter', {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    }),
     month: Joi.string().required(),
     year: Joi.number().integer().min(2020).max(2030).required(),
     noMeter: Joi.boolean().optional(),
