@@ -4,6 +4,7 @@ const Village = require('../models/Village');
 const House = require('../models/House');
 const WaterBill = require('../models/WaterBill');
 const mongoose = require('mongoose');
+const indianMobileRegex = /^\d{10}$/;
 
 // @desc    Get super admin dashboard data
 // @route   GET /api/super-admin/dashboard
@@ -163,6 +164,16 @@ const getGramPanchayatDetails = async (req, res) => {
 // @access  Private (Super Admin)
 const updateGramPanchayat = async (req, res) => {
   try {
+    if (
+      req.body?.contactPerson?.mobile &&
+      !indianMobileRegex.test(req.body.contactPerson.mobile)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact mobile must be in 10 digits'
+      });
+    }
+
     const gramPanchayat = await GramPanchayat.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -235,6 +246,13 @@ const createGPAdmin = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Gram Panchayat not found'
+      });
+    }
+
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
       });
     }
 
@@ -312,6 +330,13 @@ const createSuperAdmin = async (req, res) => {
   try {
     const { name, email, mobile, password } = req.body;
 
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
+      });
+    }
+
     const superAdmin = new User({
       name,
       email,
@@ -366,6 +391,89 @@ const deleteSuperAdmin = async (req, res) => {
     });
   }
 };
+// @desc    Get single super admin details
+// @route   GET /api/super-admin/super-admins/:id
+// @access  Private (Super Admin)
+const getSuperAdminDetails = async (req, res) => {
+  try {
+    const superAdmin = await User.findById(req.params.id)
+      .select('-password')
+      .where({ role: 'super_admin' });
+
+    if (!superAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Super Admin not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { superAdmin }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Update super admin
+// @route   PUT /api/super-admin/super-admins/:id
+// @access  Private (Super Admin)
+const updateSuperAdmin = async (req, res) => {
+  try {
+    const { name, email, mobile, password, isActive } = req.body;
+
+    if (mobile && !indianMobileRegex.test(mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
+      });
+    }
+
+    const updateData = {
+      name,
+      email,
+      mobile,
+      isActive
+    };
+
+    if (password) {
+      updateData.password = password;
+    }
+
+    const superAdmin = await User.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).where({ role: 'super_admin' })
+     .select('-password');
+
+    if (!superAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Super Admin not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Super Admin updated successfully',
+      data: superAdmin
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+
 
 module.exports = {
    getSuperAdminDetails,

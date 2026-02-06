@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const indianMobileRegex = /^\d{10}$/;
 
 const validate = (schema) => {
   return (req, res, next) => {
@@ -63,8 +64,28 @@ const schemas = {
     state: Joi.string().required(),
     contactPerson: Joi.object({
       name: Joi.string().required(),
-      mobile: Joi.string().required()
-    }).required()
+      mobile: Joi.string().pattern(indianMobileRegex).required()
+    }).required(),
+    waterTariff: Joi.object({
+      domestic: Joi.object({
+        upTo7KL: Joi.number().min(0).optional(),
+        from7to10KL: Joi.number().min(0).optional(),
+        from10to15KL: Joi.number().min(0).optional(),
+        from15to20KL: Joi.number().min(0).optional(),
+        above20KL: Joi.number().min(0).optional()
+      }).optional(),
+      nonDomestic: Joi.object({
+        publicPrivateInstitutions: Joi.number().min(0).optional(),
+        commercialEnterprises: Joi.number().min(0).optional(),
+        industrialEnterprises: Joi.number().min(0).optional()
+      }).optional(),
+      fixedAmount: Joi.number().min(0).optional()
+    }).optional(),
+    qrCodeData: Joi.object({
+      upiId: Joi.string().allow('', null).optional(),
+      merchantName: Joi.string().allow('', null).optional()
+    }).optional(),
+    isActive: Joi.boolean().optional()
   }),
 
   createUser: Joi.object({
@@ -106,7 +127,9 @@ const schemas = {
     totalUsage: Joi.number().min(0).required(),
     month: Joi.string().required(),
     year: Joi.number().integer().min(2020).max(2030).required(),
-    dueDate: Joi.date().required()
+    noMeter: Joi.boolean().optional(),
+    damagedMeter: Joi.boolean().optional(),
+    // dueDate: Joi.string().required()
   }),
 
   makePayment: Joi.object({

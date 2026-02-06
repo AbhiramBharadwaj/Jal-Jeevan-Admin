@@ -12,6 +12,7 @@ const moment = require('moment');
 const mongoose = require('mongoose');
 const fs = require('fs');
 const XLSX = require('xlsx');
+const indianMobileRegex = /^\d{10}$/;
 
 // Helper function to round to 2 decimal places
 const roundToTwo = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
@@ -447,6 +448,13 @@ const createHouse = async (req, res) => {
     const gpId = req.user.gramPanchayat._id;
     const selectedVillageId = villageId || village;
 
+    if (!indianMobileRegex.test(mobileNumber || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
+      });
+    }
+
     // Validate village belongs to this GP
     const villageDoc = await Village.findOne({
       _id: selectedVillageId,
@@ -777,7 +785,9 @@ const deleteHouse = async (req, res) => {
 const generateWaterBill = async (req, res) => {
   try {
     const { id } = req.params;
-    const { currentReading, month, year, dueDate } = req.body;
+    console.log(req.body);
+    
+    const { currentReading, month, year, noMeter = false, damagedMeter = false } = req.body;
     const gpId = req.user.gramPanchayat._id;
 
     const house = await House.findOne({
@@ -830,7 +840,9 @@ const generateWaterBill = async (req, res) => {
       others: 0,
       totalAmount: roundToTwo(currentDemand + arrears),
       remainingAmount: roundToTwo(currentDemand + arrears),
-      dueDate: new Date(dueDate),
+      dueDate: gramPanchayat.DueDays?gramPanchayat.DueDays: "Not Set",
+      noMeter,
+      damagedMeter,
       status: 'pending'
     });
 
@@ -1404,6 +1416,13 @@ const createUser = async (req, res) => {
     const { name, email, mobile, password, role } = req.body;
     const gpId = req.user.gramPanchayat._id;
 
+    if (!indianMobileRegex.test(mobile || '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
+      });
+    }
+
     // Only allow creating gp_admin and mobile_user roles
     if (!['gp_admin', 'mobile_user'].includes(role)) {
       return res.status(400).json({
@@ -1486,6 +1505,13 @@ const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const gpId = req.user.gramPanchayat._id;
+
+    if (req.body.mobile && !indianMobileRegex.test(req.body.mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be in 10 digits'
+      });
+    }
 
     const user = await User.findOneAndUpdate(
       { _id: id, gramPanchayat: gpId },
@@ -1688,6 +1714,16 @@ const exportBillsData = async (req, res) => {
 const updateGPSettings = async (req, res) => {
   try {
     const gpId = req.user.gramPanchayat._id;
+
+    if (
+      req.body?.contactPerson?.mobile &&
+      !indianMobileRegex.test(req.body.contactPerson.mobile)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact mobile must be in 10 digits'
+      });
+    }
 
     const gramPanchayat = await GramPanchayat.findByIdAndUpdate(
       gpId,

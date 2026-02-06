@@ -609,8 +609,9 @@ const generateWaterBill = async (req, res) => {
       totalUsage,
       currentReading, 
       month, 
-      year, 
-      dueDate 
+      year,
+      noMeter = false,
+      damagedMeter = false
     } = req.body;
     console.log(req.body);
     console.log(req.req);
@@ -672,30 +673,50 @@ const generateWaterBill = async (req, res) => {
     const currentDemand = calculateWaterBill(usage, gramPanchayat.waterTariff, house.usageType);
 
     // Check for arrears from previous unpaid bills
-    const unpaidBills = await WaterBill.find({
-      house: house._id,
-      status: { $in: ['pending', 'partial'] }
-    });
+      const unpaidBills = await WaterBill.find({
+         house: house._id,
+         status: { $in: ['pending', 'partial'] }
+       });
+   
+       const arrears = roundToTwo(unpaidBills.reduce((sum, bill) => sum + bill.remainingAmount, 0));
+   
+       const bill = new WaterBill({
+         house: house._id,
+         gramPanchayat: gpId,
+         month,
+         year: parseInt(year),
+         previousReading,
+         currentReading,
+         totalUsage,
+         currentDemand: roundToTwo(currentDemand),
+         arrears,
+         interest: 0,
+         others: 0,
+         totalAmount: roundToTwo(currentDemand + arrears),
+         remainingAmount: roundToTwo(currentDemand + arrears),
+         dueDate: gramPanchayat.DueDays?gramPanchayat.DueDays: "Not Set",
+         noMeter,
+         damagedMeter,
+         status: 'pending'
+       });
 
-    const arrears = roundToTwo(unpaidBills.reduce((sum, bill) => sum + bill.remainingAmount, 0));
-
-    const bill = new WaterBill({
-      house: house._id,
-      gramPanchayat: gpId,
-      month,
-      year: parseInt(year),
-      previousReading: prevReading,
-      currentReading: currReading,
-      totalUsage: usage,
-      currentDemand: roundToTwo(currentDemand),
-      arrears,
-      interest: 0,
-      others: 0,
-      totalAmount: roundToTwo(currentDemand + arrears),
-      remainingAmount: roundToTwo(currentDemand + arrears),
-      dueDate: new Date(dueDate),
-      status: 'pending' // Explicitly set status
-    });
+    // const bill = new WaterBill({
+    //   house: house._id,
+    //   gramPanchayat: gpId,
+    //   month,
+    //   year: parseInt(year),
+    //   previousReading: prevReading,
+    //   currentReading: currReading,
+    //   totalUsage: usage,
+    //   currentDemand: roundToTwo(currentDemand),
+    //   arrears,
+    //   interest: 0,
+    //   others: 0,
+    //   totalAmount: roundToTwo(currentDemand + arrears),
+    //   remainingAmount: roundToTwo(currentDemand + arrears),
+    //   dueDate: gramPanchayat.DueDays?gramPanchayat.DueDays: "Not Set",
+    //   status: 'pending' // Explicitly set status
+    // });
 
     await bill.save();
 
